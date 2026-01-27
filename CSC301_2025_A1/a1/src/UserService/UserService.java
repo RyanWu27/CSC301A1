@@ -16,9 +16,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
+class User {
+    int id;
+    String username;
+    String email;
+    String password;
+
+    User(int id, String username, String email, String password) {
+        this.id = id;
+        this.username = username;
+        this.email = email;
+        this.password = password;
+    }
+}
+
 public class UserService { // All programs for UserService
 
-    static Map<Integer, String> users = new HashMap<>();
+    static Map<Integer, User> users = new HashMap<>();
 
     public static void main(String[] args) throws IOException {
         System.out.println("UserService starting...");
@@ -72,10 +86,18 @@ public class UserService { // All programs for UserService
                 return;
             }
 
-            // Trying to get the id, so we can put the body into this id location
-            int id = Integer.parseInt(body.replaceAll("\\D+", ""));
-            users.put(id, body);
+            Integer id = jsonGetInt(body, "id");
+            String username = jsonGetString(body, "username");
+            String email = jsonGetString(body, "email");
+            String password = jsonGetString(body, "password");
 
+            // Trying to get the id, so we can put the body into this id location
+            if (id == null || username == null || email == null || password == null) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
+            users.put(id, new User(id, username, email, password));
             sendResponse(exchange, "User created");
         }
 
@@ -94,7 +116,9 @@ public class UserService { // All programs for UserService
             }
 
             // return the user if it exists
-            sendResponse(exchange, users.get(id));
+            User u = users.get(id);
+            String json = "{\"id\":" + u.id + ",\"username\":\"" + u.username + "\",\"email\":\"" + u.email + "\"}";
+            sendResponse(exchange, json);
         }
 
         private static String getRequestBody(HttpExchange exchange) throws IOException {
@@ -119,5 +143,39 @@ public class UserService { // All programs for UserService
             os.close();
 
         }
+
+        private static String jsonGetString(String json, String key) {
+            String pat = "\"" + key + "\"";
+            int i = json.indexOf(pat);
+            if (i < 0) return null;
+            int colon = json.indexOf(":", i);
+            if (colon < 0) return null;
+
+            int q1 = json.indexOf("\"", colon + 1);
+            int q2 = json.indexOf("\"", q1 + 1);
+            if (q1 < 0 || q2 < 0) return null;
+
+            return json.substring(q1 + 1, q2);
+        }
+
+        private static Integer jsonGetInt(String json, String key) {
+            String pat = "\"" + key + "\"";
+            int i = json.indexOf(pat);
+            if (i < 0) return null;
+            int colon = json.indexOf(":", i);
+            if (colon < 0) return null;
+
+            int j = colon + 1;
+            while (j < json.length() && Character.isWhitespace(json.charAt(j))) j++;
+
+            int start = j;
+            if (j < json.length() && json.charAt(j) == '-') j++;
+            while (j < json.length() && Character.isDigit(json.charAt(j))) j++;
+
+            if (start == j) return null;
+            try { return Integer.parseInt(json.substring(start, j)); }
+            catch (NumberFormatException e) { return null; }
+        }
+
     }
 }
