@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+
 class User {
     int id;
     String username;
@@ -75,7 +78,27 @@ public class UserService { // All programs for UserService
         }
 
         private void handlePost(HttpExchange exchange) throws IOException {
-            String body = getRequestBody(exchange);
+            JsonNode body = getRequestBodyAsNode(exchange);
+
+            String command = body.get("command").asText();
+            String command = body.get("id").asInt();
+
+            if (!(command)) { exchange.sendResponseHeaders(400, 0); }
+
+            switch (command) {
+                case "create":
+                    handleCreate(exchange, body, id);
+                    break;
+                case "update":
+                    handleUpdate(exchange, body, id);
+                    break;
+                case "delete":
+                    handleDelete(exchange, body, id);
+                    break;
+                default:
+                    sendResponse(exchange, 400, "{}");
+            }
+
 
             // == Incomeplete ==
 
@@ -102,7 +125,6 @@ public class UserService { // All programs for UserService
         }
 
         private void handleGet(HttpExchange exchange) throws IOException {
-
             // == Incomeplete ==
 
             String path = exchange.getRequestURI().getPath();
@@ -132,6 +154,12 @@ public class UserService { // All programs for UserService
             }
         }
 
+        private static JsonNode getRequestBodyAsNode(HttpExchange exchange) throws IOException {
+            ObjectMapper mapper = new ObjectMapper();
+            // Directly parses the InputStream into a tree structure (JsonNode)
+            return mapper.readTree(exchange.getRequestBody());
+        }
+
         private static void sendResponse(HttpExchange exchange, String response) throws IOException {
 
             // Turns response string into bytes, and then send header show it works, next make a stream
@@ -144,37 +172,41 @@ public class UserService { // All programs for UserService
 
         }
 
-        private static String jsonGetString(String json, String key) {
-            String pat = "\"" + key + "\"";
-            int i = json.indexOf(pat);
-            if (i < 0) return null;
-            int colon = json.indexOf(":", i);
-            if (colon < 0) return null;
+        private static void handleCreate(HttpExchange exchange, JsonNode body, int id) {
+            String username = body.get("username").asString();
+            String email = body.get("email").asString();
+            String password = body.get("password").asString();
 
-            int q1 = json.indexOf("\"", colon + 1);
-            int q2 = json.indexOf("\"", q1 + 1);
-            if (q1 < 0 || q2 < 0) return null;
+            User newUser = new User(id, username, email, String password);
+            users.put(id, newUser);
 
-            return json.substring(q1 + 1, q2);
         }
 
-        private static Integer jsonGetInt(String json, String key) {
-            String pat = "\"" + key + "\"";
-            int i = json.indexOf(pat);
-            if (i < 0) return null;
-            int colon = json.indexOf(":", i);
-            if (colon < 0) return null;
+        private static void handleUpdate(HttpExchange exchange, JsonNode body, int id) {
+            User existingUser = users.get(id);
 
-            int j = colon + 1;
-            while (j < json.length() && Character.isWhitespace(json.charAt(j))) j++;
+            if (existingUser == null) { // Return error user DNE
+            }
 
-            int start = j;
-            if (j < json.length() && json.charAt(j) == '-') j++;
-            while (j < json.length() && Character.isDigit(json.charAt(j))) j++;
+            if body.has("username") {
+                existingUser.setUsername(body.get("username").asString());
+            }
+            if body.has("email") {
+                existingUser.setEmail(body.get("email").asString());
+            }
+            if body.has("password") {
+                existingUser.setPassword(body.get("password").asString());
+            }
 
-            if (start == j) return null;
-            try { return Integer.parseInt(json.substring(start, j)); }
-            catch (NumberFormatException e) { return null; }
+        }
+
+        private static void handleDelete(HttpExchange exchange, JsonNode body, int id) {
+            User existingUser = users.get(id);
+
+            if (existingUser == null) { // Return error user DNE
+            }
+
+            users.remove(id); // Removed
         }
 
     }
