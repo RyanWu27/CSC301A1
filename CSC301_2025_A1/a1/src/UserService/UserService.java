@@ -25,9 +25,11 @@ public class UserService { // All programs for UserService
 
         int port = 14001; // temporary hardcoded port
 
+        // Literally Server creation
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.setExecutor(Executors.newFixedThreadPool(20));
 
+        // Routers that help us handle different paths
         server.createContext("/user", new UserHandler());
         server.createContext("/user/", new UserHandler());
 
@@ -42,6 +44,7 @@ public class UserService { // All programs for UserService
             String method = exchange.getRequestMethod();
             String path = exchange.getRequestURI().getPath();
 
+            // Handles differently based on the method
             if ("POST".equals(method) && path.equals("/user")) {
                 handlePost(exchange);
                 return;
@@ -52,6 +55,7 @@ public class UserService { // All programs for UserService
                 return;
             }
 
+            // If something cannot be handled, there is error
             exchange.sendResponseHeaders(404, 0);
             exchange.close();
         }
@@ -59,12 +63,16 @@ public class UserService { // All programs for UserService
         private void handlePost(HttpExchange exchange) throws IOException {
             String body = getRequestBody(exchange);
 
+            // == Incomeplete ==
+
+            // If it is not create, then it is error and we close request
             if (!body.contains("\"command\":\"create\"")) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
+            // Trying to get the id, so we can put the body into this id location
             int id = Integer.parseInt(body.replaceAll("\\D+", ""));
             users.put(id, body);
 
@@ -73,19 +81,24 @@ public class UserService { // All programs for UserService
 
         private void handleGet(HttpExchange exchange) throws IOException {
 
+            // == Incomeplete ==
+
             String path = exchange.getRequestURI().getPath();
             int id = Integer.parseInt(path.substring("/user/".length()));
 
+            // Check if id is in our hashmaps, if not it is not found error
             if (!users.containsKey(id)) {
                 exchange.sendResponseHeaders(404, 0);
                 exchange.close();
                 return;
             }
 
+            // return the user if it exists
             sendResponse(exchange, users.get(id));
         }
 
         private static String getRequestBody(HttpExchange exchange) throws IOException {
+            // Remember there is polymorphism, might want to change function name
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
                 StringBuilder sb = new StringBuilder();
@@ -97,6 +110,8 @@ public class UserService { // All programs for UserService
 
         private static void sendResponse(HttpExchange exchange, String response) throws IOException {
 
+            // Turns response string into bytes, and then send header show it works, next make a stream
+            // Use the stream we write back the bytes.
             byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, bytes.length);
             OutputStream os = exchange.getResponseBody();
