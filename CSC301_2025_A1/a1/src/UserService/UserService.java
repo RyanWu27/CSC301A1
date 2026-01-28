@@ -81,6 +81,8 @@ public class UserService { // All programs for UserService
 
             if (command == null || s_id == null) {
                 // Required fields missing, send appropriate output
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
                 return;
             }
 
@@ -98,6 +100,9 @@ public class UserService { // All programs for UserService
                     break;
                 default:
                     // not sure what should go here
+                    exchange.sendResponseHeaders(400, 0);
+                    exchange.close();
+                    break;
             }
         }
 
@@ -105,17 +110,24 @@ public class UserService { // All programs for UserService
             // == Incomeplete ==
 
             String path = exchange.getRequestURI().getPath();
-            int id = Integer.parseInt(path.substring("/user/".length()));
+            String suffix = path.substring("/user/".length());
 
-            // Check if id is in our hashmaps, if not it is not found error
-            if (!users.containsKey(id)) {
+            int id;
+            try {
+                id = Integer.parseInt(suffix);
+            } catch (Exception e) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
+
+            User u = users.get(id);
+            if (u == null) {
                 exchange.sendResponseHeaders(404, 0);
                 exchange.close();
                 return;
             }
 
-            // return the user if it exists
-            User u = users.get(id);
             String json = "{\"id\":" + u.id + ",\"username\":\"" + u.username + "\",\"email\":\"" + u.email + "\"}";
             sendResponse(exchange, json);
         }
@@ -149,6 +161,8 @@ public class UserService { // All programs for UserService
             String content = body.substring(1, body.length() - 1);
             String[] pairs = content.split(",");
 
+            if (content.trim().isEmpty()) return data;
+
             for (String pair : pairs) {
                 String[] parts = pair.split(":", 2); // Split only on the first colon
                 if (parts.length == 2) {
@@ -172,20 +186,29 @@ public class UserService { // All programs for UserService
 
         }
 
-        private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) {
+        private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
             String username = data.get("username");
             String email = data.get("email");
             String password = data.get("password");
+
+            // If there is missing field, we need to send error and close
+            if (username == null || email == null || password == null) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
 
             User newUser = new User(id, username, email, password);
             users.put(id, newUser);
 
         }
 
-        private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) {
+        private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) throws  IOException {
             User existingUser = users.get(id);
 
-            if (existingUser == null) { // Return error user DNE
+            if (existingUser == null) { // Return error user DNE (Not found)
+                exchange.sendResponseHeaders(404, 0);
+                exchange.close();
                 return;
             }
 
@@ -197,16 +220,38 @@ public class UserService { // All programs for UserService
 
         }
 
-        private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) {
+        private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
             User existingUser = users.get(id);
 
-            if (existingUser == null) { // Return error, user DNE
+            if (existingUser == null) { // Return error, user DNE (Not found)
+                exchange.sendResponseHeaders(404, 0);
+                exchange.close();
                 return;
             }
-            if (data.get("username").equals(existingUser.username) && data.get("email").equals(existingUser.email) &&
-                    data.get("password").equals(existingUser.password)) {
-                users.remove(id); // Removed, send appropriate response
+
+
+            String username = data.get("username");
+            String email = data.get("email");
+            String password = data.get("password");
+
+            if (username == null || email == null || password == null) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
             }
+
+            if (username.equals(existingUser.username) && email.equals(existingUser.email) &&
+                    password.equals(existingUser.password)) {
+                users.remove(id); // Removed, send appropriate response
+                exchange.sendResponseHeaders(200, 0); // success
+                exchange.close();
+                return;
+            }
+
+            // Mismatch
+            exchange.sendResponseHeaders(400, 0);
+            exchange.close();
+            return;
         }
 
     }
