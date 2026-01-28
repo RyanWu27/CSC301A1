@@ -16,9 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-
 class User {
     int id;
     String username;
@@ -78,50 +75,30 @@ public class UserService { // All programs for UserService
         }
 
         private void handlePost(HttpExchange exchange) throws IOException {
-            JsonNode body = getRequestBodyAsNode(exchange);
+            Map<String, String> userData = getRequestData(exchange);
+            String command = userData.get("command");
+            String s_id = userData.get("id");
 
-            String command = body.get("command").asText();
-            String command = body.get("id").asInt();
+            if (command == null || s_id == null) {
+                // Required fields missing, send appropriate output
+                return;
+            }
 
-            if (!(command)) { exchange.sendResponseHeaders(400, 0); }
+            int id = Integer.parseInt(s_id);
 
             switch (command) {
                 case "create":
-                    handleCreate(exchange, body, id);
+                    handleCreate(exchange, userData, id);
                     break;
                 case "update":
-                    handleUpdate(exchange, body, id);
+                    handleUpdate(exchange, userData, id);
                     break;
                 case "delete":
-                    handleDelete(exchange, body, id);
+                    handleDelete(exchange, userData, id);
                     break;
                 default:
-                    sendResponse(exchange, 400, "{}");
+                    // not sure what should go here
             }
-
-
-            // == Incomeplete ==
-
-            // If it is not create, then it is error and we close request
-            if (!body.contains("\"command\":\"create\"")) {
-                exchange.sendResponseHeaders(400, 0);
-                exchange.close();
-                return;
-            }
-
-            Integer id = jsonGetInt(body, "id");
-            String username = jsonGetString(body, "username");
-            String email = jsonGetString(body, "email");
-            String password = jsonGetString(body, "password");
-
-            // Trying to get the id, so we can put the body into this id location
-            if (id == null || username == null || email == null || password == null) {
-                exchange.sendResponseHeaders(400, 0);
-                exchange.close();
-                return;
-            }
-            users.put(id, new User(id, username, email, password));
-            sendResponse(exchange, "User created");
         }
 
         private void handleGet(HttpExchange exchange) throws IOException {
@@ -154,10 +131,33 @@ public class UserService { // All programs for UserService
             }
         }
 
-        private static JsonNode getRequestBodyAsNode(HttpExchange exchange) throws IOException {
-            ObjectMapper mapper = new ObjectMapper();
-            // Directly parses the InputStream into a tree structure (JsonNode)
-            return mapper.readTree(exchange.getRequestBody());
+        private static Map<String, String> getRequestData(HttpExchange exchange) throws IOException {
+            Map<String, String> data = new HashMap<>();
+
+            // Read the stream into a String first
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+            }
+
+            String body = sb.toString().trim();
+            if (body.isEmpty() || !body.startsWith("{")) return data;
+
+            // Manual parsing: strip braces and split into pairs
+            String content = body.substring(1, body.length() - 1);
+            String[] pairs = content.split(",");
+
+            for (String pair : pairs) {
+                String[] parts = pair.split(":", 2); // Split only on the first colon
+                if (parts.length == 2) {
+                    String key = parts[0].trim().replace("\"", "");
+                    String value = parts[1].trim().replace("\"", "");
+                    data.put(key, value);
+                }
+            }
+            return data;
         }
 
         private static void sendResponse(HttpExchange exchange, String response) throws IOException {
@@ -172,41 +172,41 @@ public class UserService { // All programs for UserService
 
         }
 
-        private static void handleCreate(HttpExchange exchange, JsonNode body, int id) {
-            String username = body.get("username").asString();
-            String email = body.get("email").asString();
-            String password = body.get("password").asString();
+        private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) {
+            String username = data.get("username");
+            String email = data.get("email");
+            String password = data.get("password");
 
-            User newUser = new User(id, username, email, String password);
+            User newUser = new User(id, username, email, password);
             users.put(id, newUser);
 
         }
 
-        private static void handleUpdate(HttpExchange exchange, JsonNode body, int id) {
+        private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) {
             User existingUser = users.get(id);
 
             if (existingUser == null) { // Return error user DNE
+                return;
             }
 
-            if body.has("username") {
-                existingUser.setUsername(body.get("username").asString());
-            }
-            if body.has("email") {
-                existingUser.setEmail(body.get("email").asString());
-            }
-            if body.has("password") {
-                existingUser.setPassword(body.get("password").asString());
-            }
+            if (data.containsKey("username")) existingUser.username = data.get("username");
+            if (data.containsKey("email")) existingUser.email = data.get("email");
+            if (data.containsKey("password")) existingUser.password = data.get("password");
+
+            // Updated all fields at this point, need appropriate output
 
         }
 
-        private static void handleDelete(HttpExchange exchange, JsonNode body, int id) {
+        private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) {
             User existingUser = users.get(id);
 
-            if (existingUser == null) { // Return error user DNE
+            if (existingUser == null) { // Return error, user DNE
+                return;
             }
-
-            users.remove(id); // Removed
+            if (data.get("username").equals(existingUser.username) && data.get("email").equals(existingUser.email) &&
+                    data.get("password").equals(existingUser.password)) {
+                users.remove(id); // Removed, send appropriate response
+            }
         }
 
     }
