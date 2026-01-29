@@ -3,16 +3,13 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
+import java.security.MessageDigest;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
@@ -37,7 +34,28 @@ public class UserService { // All programs for UserService
     public static void main(String[] args) throws IOException {
         System.out.println("UserService starting...");
 
-        int port = 14001; // temporary hardcoded port
+        if (args.length != 1) { // Not hardcode port
+            System.err.println("Usage: java UserService config.json");
+            return;
+        }
+
+        String configPath = args[0];
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(configPath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+        String config = sb.toString();
+
+        int port = extractPort(config, "UserService");
+
+        if (port <= 0) {
+            System.err.println("Invalid port in config.json");
+            return;
+        }
 
         // Literally Server creation
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -49,6 +67,26 @@ public class UserService { // All programs for UserService
 
         server.start();
         System.out.println("Server started on port " + port);
+    }
+
+    private static int extractPort(String json, String serviceName) {
+        int i = json.indexOf(serviceName);
+        if (i < 0) return -1;
+
+        int p = json.indexOf("port", i);
+        if (p < 0) return -1;
+
+        int colon = json.indexOf(":", p);
+        int j = colon + 1;
+
+        while (j < json.length() && !Character.isDigit(json.charAt(j))) j++;
+
+        int start = j;
+        while (j < json.length() && Character.isDigit(json.charAt(j))) j++;
+
+        if (start == j) return -1;
+
+        return Integer.parseInt(json.substring(start, j));
     }
 
     static class UserHandler implements HttpHandler {
@@ -86,7 +124,14 @@ public class UserService { // All programs for UserService
                 return;
             }
 
-            int id = Integer.parseInt(s_id);
+            int id;
+            try {
+                id = Integer.parseInt(s_id);
+            } catch (Exception e) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
 
             switch (command) {
                 case "create":
@@ -132,17 +177,6 @@ public class UserService { // All programs for UserService
             sendResponse(exchange, json);
         }
 
-        private static String getRequestBody(HttpExchange exchange) throws IOException {
-            // Remember there is polymorphism, might want to change function name
-            try (BufferedReader br = new BufferedReader(
-                    new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) sb.append(line);
-                return sb.toString();
-            }
-        }
-
         private static Map<String, String> getRequestData(HttpExchange exchange) throws IOException {
             Map<String, String> data = new HashMap<>();
 
@@ -155,7 +189,9 @@ public class UserService { // All programs for UserService
             }
 
             String body = sb.toString().trim();
-            if (body.isEmpty() || !body.startsWith("{")) return data;
+            if (body.length() < 2 || !body.startsWith("{") || !body.endsWith("}")) {
+                return data;
+            }
 
             // Manual parsing: strip braces and split into pairs
             String content = body.substring(1, body.length() - 1);
@@ -179,11 +215,12 @@ public class UserService { // All programs for UserService
             // Turns response string into bytes, and then send header show it works, next make a stream
             // Use the stream we write back the bytes.
             byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, bytes.length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(bytes);
-            os.close();
-
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+            exchange.close();
         }
 
         private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
@@ -192,14 +229,30 @@ public class UserService { // All programs for UserService
             String password = data.get("password");
 
             // If there is missing field, we need to send error and close
-            if (username == null || email == null || password == null) {
+            if (username == null || username.trim().isEmpty() ||
+                    email == null || email.trim().isEmpty() ||
+                    password == null || password.trim().isEmpty()) {
+
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
-            User newUser = new User(id, username, email, password);
+            // If user is already there, we can't create
+            if (users.get(id) != null) {
+                exchange.sendResponseHeaders(409, 0);
+                exchange.close();
+                return;
+            }
+
+            // Successfully Created new user
+
+            String hashed = sha256LowerHex(password); // Need to make sure password can take SHA256 hash.
+
+            User newUser = new User(id, username, email, hashed);
             users.put(id, newUser);
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
 
         }
 
@@ -212,12 +265,25 @@ public class UserService { // All programs for UserService
                 return;
             }
 
-            if (data.containsKey("username")) existingUser.username = data.get("username");
-            if (data.containsKey("email")) existingUser.email = data.get("email");
-            if (data.containsKey("password")) existingUser.password = data.get("password");
+            if (data.containsKey("username")) {
+                String v = data.get("username");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                existingUser.username = v;
+            }
+            if (data.containsKey("email")) {
+                String v = data.get("email");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                existingUser.email = v;
+            }
+            if (data.containsKey("password")) {
+                String v = data.get("password");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                existingUser.password = sha256LowerHex(v); // Again make sure it can take hash
+            }
 
             // Updated all fields at this point, need appropriate output
-
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
         }
 
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
@@ -234,25 +300,40 @@ public class UserService { // All programs for UserService
             String email = data.get("email");
             String password = data.get("password");
 
-            if (username == null || email == null || password == null) {
+            if (username == null || username.trim().isEmpty() ||
+                    email == null || email.trim().isEmpty() ||
+                    password == null || password.trim().isEmpty()) {
+
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
             if (username.equals(existingUser.username) && email.equals(existingUser.email) &&
-                    password.equals(existingUser.password)) {
-                users.remove(id); // Removed, send appropriate response
+                    sha256LowerHex(password).equals(existingUser.password)) { // Hash password care
+                users.remove(id); // Removed the user, send appropriate response
                 exchange.sendResponseHeaders(200, 0); // success
                 exchange.close();
                 return;
             }
 
             // Mismatch
-            exchange.sendResponseHeaders(400, 0);
+            exchange.sendResponseHeaders(404, 0);
             exchange.close();
-            return;
         }
 
     }
+
+    private static String sha256LowerHex(String s) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(s.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
