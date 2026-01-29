@@ -2,30 +2,26 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
 
 class Product {
     int id;
-    String productname;
+    String name;
     String description;
     float price;
     int quantity;
 
-    Product(int id, String productname, String description, float price, int quantity) {
+    Product(int id, String name, String description, float price, int quantity) {
         this.id = id;
-        this.productname = productname;
+        this.name = name;
         this.description = description;
         this.price = price;
         this.quantity = quantity;
@@ -39,7 +35,28 @@ public class ProductService {
     public static void main(String[] args) throws Exception {
         System.out.println("ProductService starting...");
 
-        int port = 14002; // temporary, we will read config.json later
+        if (args.length != 1) { // Not hardcode port
+            System.err.println("Usage: java ProductService config.json");
+            return;
+        }
+
+        String configPath = args[0];
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(configPath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+        String config = sb.toString();
+
+        int port = extractPort(config, "ProductService");
+
+        if (port <= 0) {
+            System.err.println("Invalid port in config.json");
+            return;
+        }
 
         // Creation
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -50,6 +67,26 @@ public class ProductService {
 
         server.start();
         System.out.println("ProductService listening on port " + port);
+    }
+
+    private static int extractPort(String json, String serviceName) {
+        int i = json.indexOf(serviceName);
+        if (i < 0) return -1;
+
+        int p = json.indexOf("port", i);
+        if (p < 0) return -1;
+
+        int colon = json.indexOf(":", p);
+        int j = colon + 1;
+
+        while (j < json.length() && !Character.isDigit(json.charAt(j))) j++;
+
+        int start = j;
+        while (j < json.length() && Character.isDigit(json.charAt(j))) j++;
+
+        if (start == j) return -1;
+
+        return Integer.parseInt(json.substring(start, j));
     }
 
     static class ProductHandler implements HttpHandler {
@@ -139,7 +176,8 @@ public class ProductService {
             }
 
             String json = "{\"id\":" + p.id
-                    + ",\"productname\":\"" + p.productname + "\""
+                    + ",\"name\":\"" + p.name + "\""
+                    + ",\"description\":\"" + p.description + "\""
                     + ",\"price\":" + p.price
                     + ",\"quantity\":" + p.quantity
                     + "}";
@@ -160,7 +198,9 @@ public class ProductService {
             }
 
             String body = sb.toString().trim();
-            if (body.isEmpty() || !body.startsWith("{")) return data;
+            if (body.length() < 2 || !body.startsWith("{") || !body.endsWith("}")) {
+                return data;
+            }
 
             // Manual parsing: strip braces and split into pairs
             String content = body.substring(1, body.length() - 1);
@@ -185,23 +225,27 @@ public class ProductService {
             // Turns response string into bytes, and then send header show it works, next make a stream
             // Use the stream we write back the bytes.
             byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, bytes.length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(bytes);
-            os.close();
-
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+            exchange.close();
         }
 
         private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
 
-            String productname = data.get("productname");
+            String name = data.get("name");
             String description = data.get("description");
             String sPrice = data.get("price");
             String sQty = data.get("quantity");
 
 
             // If there is missing field, we need to send error and close
-            if (productname == null || description == null || sPrice == null || sQty == null) {
+            if (name == null || name.trim().isEmpty() ||
+                    description == null || description.trim().isEmpty() ||
+                    sPrice == null || sPrice.trim().isEmpty() ||
+                    sQty == null || sQty.trim().isEmpty()) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
@@ -218,7 +262,13 @@ public class ProductService {
                 return;
             }
 
-            Product newProduct = new Product(id, productname, description, priceVal, qtyVal);
+            if (products.get(id) != null) { // Duplicated id
+                exchange.sendResponseHeaders(409, 0);
+                exchange.close();
+                return;
+            }
+
+            Product newProduct = new Product(id, name, description, priceVal, qtyVal);
             products.put(id, newProduct);
             exchange.sendResponseHeaders(200, 0);
             exchange.close();
@@ -235,22 +285,32 @@ public class ProductService {
                 return;
             }
 
-            if (data.containsKey("productname")) existingProduct.productname = data.get("productname");
-            if (data.containsKey("description")) existingProduct.description = data.get("description");
+            if (data.containsKey("name")) {
+                String v = data.get("name");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                existingProduct.name = v;
+            }
+            if (data.containsKey("description")) {
+                String v = data.get("description");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                existingProduct.description = v;
+            }
             if (data.containsKey("price")) {
-                try { existingProduct.price = Float.parseFloat(data.get("price")); }
+                String v = data.get("price");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                try { existingProduct.price = Float.parseFloat(v); }
                 catch (Exception e) { exchange.sendResponseHeaders(400,0); exchange.close(); return; }
             }
             if (data.containsKey("quantity")) {
-                try { existingProduct.quantity = Integer.parseInt(data.get("quantity")); }
+                String v = data.get("quantity");
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                try { existingProduct.quantity = Integer.parseInt(v); }
                 catch (Exception e) { exchange.sendResponseHeaders(400,0); exchange.close(); return; }
             }
 
             // Updated all fields at this point, need appropriate output
-
             exchange.sendResponseHeaders(200, 0);
             exchange.close();
-
         }
 
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
@@ -262,12 +322,15 @@ public class ProductService {
                 return;
             }
 
-            String productname = data.get("productname");
+            String name = data.get("name");
             String description = data.get("description");
             String sPrice = data.get("price");
             String sQty = data.get("quantity");
 
-            if (productname == null || description == null || sPrice == null || sQty == null) {
+            if (name == null || name.trim().isEmpty() ||
+                    description == null || description.trim().isEmpty() ||
+                    sPrice == null || sPrice.trim().isEmpty() ||
+                    sQty == null || sQty.trim().isEmpty()) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
@@ -284,9 +347,9 @@ public class ProductService {
                 return;
             }
 
-            if (productname.equals(existingProduct.productname) &&
+            if (name.equals(existingProduct.name) &&
                     description.equals(existingProduct.description) &&
-                    existingProduct.price == priceVal &&
+                    Float.compare(existingProduct.price, priceVal) == 0 &&
                     existingProduct.quantity == qtyVal) {
 
                 products.remove(id);
@@ -295,7 +358,8 @@ public class ProductService {
                 return;
             }
 
-            exchange.sendResponseHeaders(400, 0);
+            // Mismatch
+            exchange.sendResponseHeaders(404, 0);
             exchange.close();
 
         }
