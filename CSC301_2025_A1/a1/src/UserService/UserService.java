@@ -23,7 +23,7 @@ class User {
         this.id = id;
         this.username = username;
         this.email = email;
-        this.password = password;
+        this.password = password; // Already Hashed
     }
 }
 
@@ -165,19 +165,17 @@ public class UserService { // All programs for UserService
                 return;
             }
 
-            User u = users.get(id);
+            User u = users.get(id); // The user we already have
             if (u == null) {
                 exchange.sendResponseHeaders(404, 0);
                 exchange.close();
                 return;
             }
 
-            String hashed = sha256LowerHex(u.password); // Need to make sure password can take SHA256 hash.
-
             String json = "{\"id\":" + u.id
                     + ",\"username\":\"" + u.username
                     + "\",\"email\":\"" + u.email
-                    + "\",\"password\":\"" + hashed + "\"}";
+                    + "\",\"password\":\"" + u.password + "\"}";
             sendResponse(exchange, json);
         }
 
@@ -207,7 +205,7 @@ public class UserService { // All programs for UserService
                 String[] parts = pair.split(":", 2); // Split only on the first colon
                 if (parts.length == 2) {
                     String key = parts[0].trim().replace("\"", "");
-                    String value = parts[1];
+                    String value = parts[1].trim();
                     data.put(key, value);
                 }
             }
@@ -243,7 +241,6 @@ public class UserService { // All programs for UserService
             }
 
             // Check if email is valid email format (Not integers)
-
             if (!(email.startsWith("\"") && email.endsWith("\"")) || email.length() <= 2) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
@@ -264,20 +261,15 @@ public class UserService { // All programs for UserService
             }
 
             // Successfully Created new user
-
-            User newUser = new User(id, username, email, password);
+            String hashed = sha256LowerHex(password);
+            User newUser = new User(id, username, email, hashed);
             users.put(id, newUser);
-
-            String hashed = sha256LowerHex(newUser.password); // Need to make sure password can take SHA256 hash.
 
             String json = "{\"id\":" + newUser.id
                     + ",\"username\":\"" + newUser.username
                     + "\",\"email\":\"" + newUser.email
-                    + "\",\"password\":\"" + hashed + "\"}";
+                    + "\",\"password\":\"" + newUser.password + "\"}";
             sendResponse(exchange, json);
-
-            exchange.close();
-
         }
 
         private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) throws  IOException {
@@ -290,36 +282,45 @@ public class UserService { // All programs for UserService
             }
 
             if (data.containsKey("username")) {
-                String v = data.get("username");
-                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
+                String v = stripQuotes(data.get("username"));
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0);
+                    exchange.close();
+                    return;
+                }
                 existingUser.username = v;
             }
             if (data.containsKey("email")) {
                 String v = data.get("email");
-                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
-                existingUser.email = v;
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0);
+                    exchange.close();
+                    return;
+                }
+                if (!(v.startsWith("\"") && v.endsWith("\"")) || v.length() <= 2) { // Check valid email
+                    exchange.sendResponseHeaders(400, 0);
+                    exchange.close();
+                    return;
+                }
+                existingUser.email = stripQuotes(v);
             }
             if (data.containsKey("password")) {
-                String v = data.get("password");
-                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0); exchange.close(); return; }
-                existingUser.password = v; // Again make sure it can take hash
+                String v = stripQuotes(data.get("password"));
+                if (v == null || v.trim().isEmpty()) { exchange.sendResponseHeaders(400, 0);
+                    exchange.close();
+                    return;
+                }
+                existingUser.password = sha256LowerHex(v);
             }
 
             // Updated all fields at this point, need appropriate output
-
-            String hashed = sha256LowerHex(existingUser.password); // Need to make sure password can take SHA256 hash.
-
             String json = "{\"id\":" + existingUser.id
                     + ",\"username\":\"" + existingUser.username
                     + "\",\"email\":\"" + existingUser.email
-                    + "\",\"password\":\"" + hashed + "\"}";
+                    + "\",\"password\":\"" + existingUser.password + "\"}";
             sendResponse(exchange, json);
-
-            exchange.close();
         }
 
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
-            User existingUser = users.get(id);
+            User existingUser = users.get(id); // These are what we already have for a User
 
             if (existingUser == null) { // Return error, user DNE (Not found)
                 exchange.sendResponseHeaders(404, 0);
@@ -328,9 +329,10 @@ public class UserService { // All programs for UserService
             }
 
 
-            String username = data.get("username");
-            String email = data.get("email");
-            String password = data.get("password");
+            // These are from the client JSON
+            String username = stripQuotes(data.get("username"));
+            String email = stripQuotes(data.get("email"));
+            String password = stripQuotes(data.get("password"));
 
             if (username == null || username.trim().isEmpty() ||
                     email == null || email.trim().isEmpty() ||
@@ -342,10 +344,9 @@ public class UserService { // All programs for UserService
             }
 
             if (username.equals(existingUser.username) && email.equals(existingUser.email) &&
-                    sha256LowerHex(password).equals(existingUser.password)) { // Hash password care
+                    sha256LowerHex(password).equals(existingUser.password)) {
                 users.remove(id); // Removed the user, send appropriate response
                 sendResponse(exchange, "{}"); // success
-                exchange.close();
                 return;
             }
 
