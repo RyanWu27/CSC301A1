@@ -172,7 +172,12 @@ public class UserService { // All programs for UserService
                 return;
             }
 
-            String json = "{\"id\":" + u.id + ",\"username\":\"" + u.username + "\",\"email\":\"" + u.email + "\"}";
+            String hashed = sha256LowerHex(u.password); // Need to make sure password can take SHA256 hash.
+
+            String json = "{\"id\":" + u.id
+                    + ",\"username\":\"" + u.username
+                    + "\",\"email\":\"" + u.email
+                    + "\",\"password\":\"" + hashed + "\"}";
             sendResponse(exchange, json);
         }
 
@@ -246,11 +251,15 @@ public class UserService { // All programs for UserService
 
             // Successfully Created new user
 
-            String hashed = sha256LowerHex(password); // Need to make sure password can take SHA256 hash.
-
-            User newUser = new User(id, username, email, hashed);
+            User newUser = new User(id, username, email, password);
             users.put(id, newUser);
-            exchange.sendResponseHeaders(200, 0);
+
+            String json = "{\"id\":" + newUser.id
+                    + ",\"username\":\"" + newUser.username
+                    + "\",\"email\":\"" + newUser.email
+                    + "\",\"password\":\"" + newUser.password + "\"}";
+            sendResponse(exchange, json);
+
             exchange.close();
 
         }
@@ -311,7 +320,7 @@ public class UserService { // All programs for UserService
             if (username.equals(existingUser.username) && email.equals(existingUser.email) &&
                     sha256LowerHex(password).equals(existingUser.password)) { // Hash password care
                 users.remove(id); // Removed the user, send appropriate response
-                exchange.sendResponseHeaders(200, 0); // success
+                sendResponse(exchange, "{}"); // success
                 exchange.close();
                 return;
             }
