@@ -152,7 +152,6 @@ public class UserService { // All programs for UserService
         }
 
         private void handleGet(HttpExchange exchange) throws IOException {
-            // == Incomeplete ==
 
             String path = exchange.getRequestURI().getPath();
             String suffix = path.substring("/user/".length());

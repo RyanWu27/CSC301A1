@@ -14,6 +14,10 @@ import java.util.concurrent.Executors;
 public class OrderService {
 
     public static void main(String[] args) throws Exception {
+
+        // Difference Order vs User/Product: OrderService reads config.json once and reuses the information.
+        //UserService and ProductService read it once and then forget it.
+
         System.out.println("OrderService starting...");
 
         if (args.length != 1) {
@@ -21,7 +25,7 @@ public class OrderService {
             return;
         }
 
-        String config = readFile(args[0]);
+        String config = readFile(args[0]); // Basically the same thing as UserService line 42 to 51.
         int port = extractPort(config, "OrderService");
         if (port <= 0) {
             System.err.println("Invalid port in config.json");
@@ -38,18 +42,18 @@ public class OrderService {
         System.out.println("OrderService listening on port " + port);
     }
 
-    // ----------------- Handler -----------------
+    // Main logic, handle happens
     static class OrderHandler implements HttpHandler {
         private final int userPort;
         private final int productPort;
 
-        OrderHandler(String config) {
+        OrderHandler(String config) { // Extract ports from config
             this.userPort = extractPort(config, "UserService");
             this.productPort = extractPort(config, "ProductService");
         }
 
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) throws IOException { // See if it is a valid request
             String method = exchange.getRequestMethod();
             String path = exchange.getRequestURI().getPath();
 
@@ -62,10 +66,10 @@ public class OrderService {
             exchange.close();
         }
 
-        private void handlePlaceOrder(HttpExchange exchange) throws IOException {
-            Map<String, String> data = getRequestData(exchange);
+        private void handlePlaceOrder(HttpExchange exchange) throws IOException { // Place Order logic
+            Map<String, String> data = getRequestData(exchange); // parse json body
 
-            // Must be: command = "place order"
+            // Check if command is "place order"
             String command = data.get("command");
             if (command == null || !command.equals("place order")) {
                 sendJson(exchange, 400, "{\"status\":\"Invalid Request\"}");
@@ -76,11 +80,13 @@ public class OrderService {
             String sProductId = data.get("product_id");
             String sQty = data.get("quantity");
 
+            // Check if all these fields exists
             if (sUserId == null || sProductId == null || sQty == null) {
                 sendJson(exchange, 400, "{\"status\":\"Invalid Request\"}");
                 return;
             }
 
+            // Converting strings into integers
             int userId, productId, qty;
             try {
                 userId = Integer.parseInt(sUserId);
@@ -91,12 +97,13 @@ public class OrderService {
                 return;
             }
 
+            // Quantity must be non-negative
             if (qty <= 0) {
                 sendJson(exchange, 400, "{\"status\":\"Invalid Request\"}");
                 return;
             }
 
-            // 1) Check user exists
+            // Check UserService if user exists
             HttpResult userRes = httpGet("http://localhost:" + userPort + "/user/" + userId);
             if (userRes.code == 404) {
                 sendJson(exchange, 404, "{\"status\":\"Invalid Request\"}");
@@ -107,7 +114,7 @@ public class OrderService {
                 return;
             }
 
-            // 2) Check product exists + get current quantity
+            // Check if product exists and get their current quantity
             HttpResult prodRes = httpGet("http://localhost:" + productPort + "/product/" + productId);
             if (prodRes.code == 404) {
                 sendJson(exchange, 404, "{\"status\":\"Invalid Request\"}");
@@ -118,13 +125,15 @@ public class OrderService {
                 return;
             }
 
-            Map<String, String> prodJson = parseFlatJsonObject(prodRes.body);
+            // Getting the quantity of the product
+            Map<String, String> prodJson = parseFlatJsonObject(prodRes.body); // Reads stock from the JSON body
             String sStock = prodJson.get("quantity");
             if (sStock == null) {
                 sendJson(exchange, 400, "{\"status\":\"Invalid Request\"}");
                 return;
             }
 
+            // Convert the string into integer
             int stock;
             try {
                 stock = Integer.parseInt(sStock);
@@ -133,16 +142,17 @@ public class OrderService {
                 return;
             }
 
-            // 3) Stock check
+            // Ordered quantity cannot be more than the available stocks of a product
             if (qty > stock) {
                 sendJson(exchange, 409, "{\"status\":\"Exceeded quantity limit\"}");
                 return;
             }
 
-            int newStock = stock - qty;
+            // Updating ProductService quantity
+            int newStock = stock - qty; // New Stock after the order
 
-            // 4) Update product quantity by POST /product with command "update"
-            // (Your ProductService expects id + command + optional fields)
+            // Update product quantity by POST /product with command "update"
+            // This is information about Product
             String updateBody =
                     "{"
                             + "\"command\":\"update\","
@@ -150,14 +160,16 @@ public class OrderService {
                             + "\"quantity\":" + newStock
                             + "}";
 
+            // Send JSON info to ProductService
             HttpResult updateRes = httpPostJson("http://localhost:" + productPort + "/product", updateBody);
             if (updateRes.code != 200) {
-                // If update failed, treat as invalid request (simple handling)
+                // If update failed, treat as invalid request
                 sendJson(exchange, 400, "{\"status\":\"Invalid Request\"}");
                 return;
             }
 
-            // 5) Success response (match testcase)
+            // Return successful response
+            // This is information about Order
             String ok =
                     "{"
                             + "\"product_id\":" + productId + ","
@@ -169,17 +181,22 @@ public class OrderService {
         }
     }
 
-    // ----------------- Helpers -----------------
+    // Helper Functions
 
+    // It reads config.json once making a string that OrderService can reuse
     private static String readFile(String path) throws IOException {
         StringBuilder sb = new StringBuilder();
+        // FileReader opens the file at path and put it in a BufferedReader
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+
+            // Store line by line what is in the BufferedReader into StringBuilder
             String line;
             while ((line = br.readLine()) != null) sb.append(line);
         }
-        return sb.toString();
+        return sb.toString(); // Return the string of what we read
     }
 
+    // extracting port numbers from JSON file
     private static int extractPort(String json, String serviceName) {
         int i = json.indexOf(serviceName);
         if (i < 0) return -1;
@@ -199,6 +216,7 @@ public class OrderService {
         return Integer.parseInt(json.substring(start, j));
     }
 
+    // Converts the HTTP request body which is the JSON text into a usable hashmap
     private static Map<String, String> getRequestData(HttpExchange exchange) throws IOException {
         Map<String, String> data = new HashMap<>();
 
@@ -229,6 +247,7 @@ public class OrderService {
         return data;
     }
 
+    // Sends an HTTP response as JSON to client
     private static void sendJson(HttpExchange exchange, int code, String json) throws IOException {
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -241,6 +260,7 @@ public class OrderService {
 
     // Very simple “flat JSON object” parser for responses like:
     // {"id":2000,"name":"x","description":"y","price":1.2,"quantity":90}
+    // Parse JSON that came back from another service over HTTP
     private static Map<String, String> parseFlatJsonObject(String body) {
         Map<String, String> out = new HashMap<>();
         if (body == null) return out;
@@ -270,6 +290,7 @@ public class OrderService {
         }
     }
 
+    // Sending a Get Request
     private static HttpResult httpGet(String urlStr) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setRequestMethod("GET");
@@ -280,6 +301,7 @@ public class OrderService {
         return new HttpResult(code, body);
     }
 
+    // Send a Post Request with JSON
     private static HttpResult httpPostJson(String urlStr, String jsonBody) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setRequestMethod("POST");
@@ -297,6 +319,7 @@ public class OrderService {
         return new HttpResult(code, body);
     }
 
+    // Reads the HTTP response body from another service
     private static String readConnBody(HttpURLConnection conn, int code) throws IOException {
         InputStream is = (code >= 200 && code < 400) ? conn.getInputStream() : conn.getErrorStream();
         if (is == null) return "";
