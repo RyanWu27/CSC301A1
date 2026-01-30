@@ -225,35 +225,37 @@ public class UserService { // All programs for UserService
         }
 
         private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
-            String username = data.get("username");
-            String email = data.get("email");
-            String password = data.get("password");
+
+            String rawUsername = data.get("username");
+            String rawEmail = data.get("email");
+            String rawPassword = data.get("password");
 
             // If there is missing field, we need to send error and close
-            if (username == null || username.trim().isEmpty() ||
-                    email == null || email.trim().isEmpty() ||
-                    password == null || password.trim().isEmpty()) {
-
+            if (rawUsername == null || rawEmail == null || rawPassword == null) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
             // Check if email is valid email format (Not integers)
-            boolean emailWasQuoted = email.startsWith("\"") && email.endsWith("\"");
-            email = stripQuotes(email);
-
+            boolean emailWasQuoted = rawEmail.trim().startsWith("\"") && rawEmail.trim().endsWith("\"");
             if (!emailWasQuoted) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
+            String username = stripQuotes(rawUsername);
+            String email = stripQuotes(rawEmail);
+            String password = stripQuotes(rawPassword);
 
-            // strip quotes for storage / response formatting
-            username = stripQuotes(username);
-            password = stripQuotes(password);
 
+            // Validate emptiness after stripping
+            if (username.trim().isEmpty() || email.trim().isEmpty() || password.trim().isEmpty()) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
 
             // If user is already there, we can't create
             if (users.get(id) != null) {
