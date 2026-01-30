@@ -241,15 +241,18 @@ public class UserService { // All programs for UserService
             }
 
             // Check if email is valid email format (Not integers)
-            if (!(email.startsWith("\"") && email.endsWith("\"")) || email.length() <= 2) {
+            boolean emailWasQuoted = email.startsWith("\"") && email.endsWith("\"");
+            email = stripQuotes(email);
+
+            if (!emailWasQuoted) {
                 exchange.sendResponseHeaders(400, 0);
                 exchange.close();
                 return;
             }
 
+
             // strip quotes for storage / response formatting
             username = stripQuotes(username);
-            email = stripQuotes(email);
             password = stripQuotes(password);
 
 
