@@ -242,6 +242,14 @@ public class UserService { // All programs for UserService
                 return;
             }
 
+            // Check if email is valid email format (Not integers)
+            if (!email.startsWith("\"") || !email.endsWith("\"") || email.length() <= 2) {
+                exchange.sendResponseHeaders(400, 0);
+                exchange.close();
+                return;
+            }
+
+
             // If user is already there, we can't create
             if (users.get(id) != null) {
                 exchange.sendResponseHeaders(409, 0);
