@@ -114,8 +114,8 @@ public class UserService { // All programs for UserService
 
         private void handlePost(HttpExchange exchange) throws IOException {
             Map<String, String> userData = getRequestData(exchange);
-            String command = userData.get("command");
-            String s_id = userData.get("id");
+            String command = stripQuotes(userData.get("command"));
+            String s_id = stripQuotes(userData.get("id"));
 
             if (command == null || s_id == null) {
                 // Required fields missing, send appropriate output
@@ -147,7 +147,6 @@ public class UserService { // All programs for UserService
                     // not sure what should go here
                     exchange.sendResponseHeaders(400, 0);
                     exchange.close();
-                    break;
             }
         }
 
