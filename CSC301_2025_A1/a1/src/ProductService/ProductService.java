@@ -268,8 +268,14 @@ public class ProductService {
 
             Product newProduct = new Product(id, name, description, priceVal, qtyVal);
             products.put(id, newProduct);
-            exchange.sendResponseHeaders(200, 0);
-            exchange.close();
+            
+            String json = "{\"id\":" + newProduct.id
+                    + ",\"name\":\"" + newProduct.name + "\""
+                    + ",\"description\":\"" + newProduct.description + "\""
+                    + ",\"price\":" + newProduct.price
+                    + ",\"quantity\":" + newProduct.quantity
+                    + "}";
+            sendResponse(exchange, json);
 
 
         }
@@ -305,10 +311,14 @@ public class ProductService {
                 try { existingProduct.quantity = Integer.parseInt(v); }
                 catch (Exception e) { exchange.sendResponseHeaders(400,0); exchange.close(); return; }
             }
-
-            // Updated all fields at this point, need appropriate output
-            exchange.sendResponseHeaders(200, 0);
-            exchange.close();
+            String json = "{\"id\":" + existingProduct.id
+                    + ",\"name\":\"" + existingProduct.name + "\""
+                    + ",\"description\":\"" + existingProduct.description + "\""
+                    + ",\"price\":" + existingProduct.price
+                    + ",\"quantity\":" + existingProduct.quantity
+                    + "}";
+            sendResponse(exchange, json);
+            
         }
 
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
@@ -357,7 +367,7 @@ public class ProductService {
             }
 
             // Mismatch
-            exchange.sendResponseHeaders(404, 0);
+            sendResponse(exchange, "{}");
             exchange.close();
 
         }
