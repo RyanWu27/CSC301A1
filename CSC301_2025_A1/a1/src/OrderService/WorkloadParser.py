@@ -117,7 +117,7 @@ def parse_workload(file_path, base_url):
             elif service == "ORDER":
                 if action == "place":
                     payload = {
-                        "command": "place order"
+                        "command": "place order",
                         "product_id": int(parts[2]),
                         "user_id": int(parts[3]),
                         "quantity": int(parts[4])

@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -292,7 +293,7 @@ public class OrderService {
 
     // Sending a Get Request
     private static HttpResult httpGet(String urlStr) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
         conn.setRequestMethod("GET");
 
         int code = conn.getResponseCode();
@@ -303,7 +304,7 @@ public class OrderService {
 
     // Send a Post Request with JSON
     private static HttpResult httpPostJson(String urlStr, String jsonBody) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json");
