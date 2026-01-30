@@ -79,7 +79,7 @@ def parse_workload(file_path, base_url):
 
                 if action == "info":
                     product_id = parts[2]
-                    send_request(f"{base_url}/user/{product_id}", "GET")
+                    send_request(f"{base_url}/product/{product_id}", "GET")
 
                 elif action == "create":
                     payload = {
