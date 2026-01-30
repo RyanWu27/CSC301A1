@@ -11,7 +11,7 @@ usage() {
   echo "  ./runme.sh -p                 Start ProductService"
   echo "  ./runme.sh -i                 Start ISCS"
   echo "  ./runme.sh -o                 Start OrderService"
-  echo "  ./runme.sh -w workloadfile    Run workload parser (you implement)"
+  echo "  ./runme.sh -w workloadfile    Run workload parser"
   exit 1
 }
 
@@ -60,10 +60,9 @@ run_workload() {
     exit 1
   fi
 
-  echo "[workload] TODO: run your workload parser here with file: $workload_file"
-  echo "Hint: implement WorkloadParser later (can be any language)."
-  echo "Example placeholder:"
-  echo "  python3 \"$ROOT_DIR/compiled/OrderService/WorkloadParser.py\" \"$workload_file\""
+  # Run the Python workload parser from the source directory
+  echo "[workload] running parser with file: $workload_file"
+  python3 "$ROOT_DIR/src/OrderService/WorkloadParser.py" "$workload_file"
 }
 
 # --- main ---
