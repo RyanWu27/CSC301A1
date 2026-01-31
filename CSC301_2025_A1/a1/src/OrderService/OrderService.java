@@ -11,8 +11,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
+/**
+ * OrderService is a microservice responsible for order management and request routing. It handles order placement and
+ * forwards user/product requests to their respective services.
+ */
 public class OrderService {
 
+    /**
+     * Starts the OrderService microservice
+      * @param args Array containing the path to the configuration file.
+     */
     public static void main(String[] args) throws Exception {
         System.out.println("OrderService starting...");
 
@@ -108,6 +116,10 @@ public class OrderService {
             exchange.close();
         }
 
+        /**
+         * Manages order placement logic. Verifies user existence and product stock before updating.
+         * Returns 409 if requested quantity exceeds available stock.
+         */
         private void handlePlaceOrder(HttpExchange exchange) throws IOException {
             Map<String, String> data = getRequestData(exchange);
             String command = data.get("command");

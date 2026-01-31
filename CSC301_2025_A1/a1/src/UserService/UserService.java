@@ -27,10 +27,19 @@ class User {
     }
 }
 
+/**
+ * UserService is a user microservice responsible for user management. It provides a RESTful API to manage user data
+ * including endpoints for user creation, retrieval, updating, and deletion.
+ */
 public class UserService { // All programs for UserService
 
     static Map<Integer, User> users = new HashMap<>();
 
+    /**
+     * Starts the ProductService.
+     * @param args Command line arguments, expects exactly one path to config.json.
+     * @throws IOException If server creation or configuration reading fails.
+     */
     public static void main(String[] args) throws IOException {
         System.out.println("UserService starting...");
 
@@ -69,6 +78,12 @@ public class UserService { // All programs for UserService
         System.out.println("Server started on port " + port);
     }
 
+    /**
+     * Extracts port number of specified service from provided config.json manually.
+     * @param json The raw JSON file converted to a string.
+     * @param serviceName The desired service name.
+     * @return The port number as an integer, or -1 if not found.
+     */
     private static int extractPort(String json, String serviceName) {
         int i = json.indexOf(serviceName);
         if (i < 0) return -1;
@@ -89,6 +104,9 @@ public class UserService { // All programs for UserService
         return Integer.parseInt(json.substring(start, j));
     }
 
+    /**
+     * Handles request routing for /user.
+     */
     static class UserHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -112,6 +130,11 @@ public class UserService { // All programs for UserService
             exchange.close();
         }
 
+        /**
+         * Handles POST requests by routing to specific handlers based on the command field.
+         * @param exchange The HttpExchange for the current request.
+         * @throws IOException If the request fails.
+         */
         private void handlePost(HttpExchange exchange) throws IOException {
             Map<String, String> userData = getRequestData(exchange);
             String command = stripQuotes(userData.get("command"));
@@ -149,7 +172,12 @@ public class UserService { // All programs for UserService
                     exchange.close();
             }
         }
-
+        /**
+         * Processes GET requests to retrieve a user by their ID.
+         * Returns 200 with the user JSON or 404 if the user does not exist.
+         * @param exchange The HttpExchange for the current request.
+         * @throws IOException If the request fails.
+         */
         private void handleGet(HttpExchange exchange) throws IOException {
 
             String path = exchange.getRequestURI().getPath();
@@ -224,6 +252,12 @@ public class UserService { // All programs for UserService
             exchange.close();
         }
 
+        /**
+         * Validates and creates a new user. Hashes passwords using SHA-256 before storage.
+         * @param exchange The HTTP exchange object.
+         * @param data Parsed request payload.
+         * @param id The target user ID.
+         */
         private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
 
             String rawUsername = data.get("username");
@@ -276,6 +310,13 @@ public class UserService { // All programs for UserService
             sendResponse(exchange, json);
         }
 
+        /**
+         * Updates an existing user's record. Only updates fields present in the request body.
+         * @param exchange The HttpExchange for the current request.
+         * @param data Map of fields to be updated (username, email, or password).
+         * @param id The ID of the user to update.
+         * @throws IOException If request fails.
+         */
         private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) throws  IOException {
             User existingUser = users.get(id);
 
@@ -323,6 +364,9 @@ public class UserService { // All programs for UserService
             sendResponse(exchange, json);
         }
 
+        /**
+         * Deletes a user only if the provided username, email, and password match the record.
+         */
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
             User existingUser = users.get(id); // These are what we already have for a User
 
@@ -361,7 +405,11 @@ public class UserService { // All programs for UserService
 
     }
 
-    // SHA256 password formatting
+    /**
+     * Hashes a string in UPPERCASE Hex.
+     * @param s String to be hashed.
+     * @return Hashed representation of s.
+     */
     private static String sha256LowerHex(String s) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

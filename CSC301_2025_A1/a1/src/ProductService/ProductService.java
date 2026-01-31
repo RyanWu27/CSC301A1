@@ -28,10 +28,19 @@ class Product {
     }
 }
 
+/**
+ * The ProductService microservice is responsible for managing the product catalog.
+ * It provides a RESTful API to create, retrieve, update, and delete product data.
+ */
 public class ProductService {
 
     static Map<Integer, Product> products = new HashMap<>();
 
+    /**
+     * Starts the ProductService.
+     * @param args Command line arguments, expects exactly one path to config.json.
+     * @throws Exception If server creation or configuration reading fails.
+     */
     public static void main(String[] args) throws Exception {
         System.out.println("ProductService starting...");
 
@@ -69,6 +78,12 @@ public class ProductService {
         System.out.println("ProductService listening on port " + port);
     }
 
+    /**
+     * Extracts port number of specified service from provided config.json manually.
+     * @param json The raw JSON file converted to a string.
+     * @param serviceName The desired service name.
+     * @return The port number as an integer, or -1 if not found.
+     */
     private static int extractPort(String json, String serviceName) {
         int i = json.indexOf(serviceName);
         if (i < 0) return -1;
@@ -89,6 +104,10 @@ public class ProductService {
         return Integer.parseInt(json.substring(start, j));
     }
 
+    /**
+     * Handles incoming HTTP requests for /product.
+     * Routes POST/GET requests to specific handlers.
+     */
     static class ProductHandler implements HttpHandler {
         public void handle(HttpExchange exchange) throws IOException {
 
@@ -110,6 +129,11 @@ public class ProductService {
             exchange.close();
         }
 
+        /**
+         * Routes POST requests to handleCreate, handleUpdate, or handleDelete.
+         * @param exchange The HttpExchange for the current request.
+         * @throws IOException If the request fails.
+         */
         private void handlePost(HttpExchange exchange) throws IOException {
 
             Map<String, String> productData = getRequestData(exchange);
@@ -152,6 +176,9 @@ public class ProductService {
 
         }
 
+        /**
+         * Retrieves product information. Returns 404 if the ID does not exist.
+         */
         private void handleGet(HttpExchange exchange) throws IOException {
 
             String path = exchange.getRequestURI().getPath();
@@ -230,7 +257,14 @@ public class ProductService {
             }
             exchange.close();
         }
-
+        /**
+         * Validates and creates a new product in the system.
+         * Returns 200 on success, 400 for missing fields, or 409 if the ID already exists.
+         * @param exchange The HttpExchange object representing the request/response.
+         * @param data A map containing the parsed JSON request body.
+         * @param id The unique identifier for the product to be created.
+         * @throws IOException If response transmission fails.
+         */
         private static void handleCreate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
 
             String name = data.get("name");
@@ -280,6 +314,13 @@ public class ProductService {
 
         }
 
+        /**
+         * Updates existing product fields. If a field is missing, the existing value is unchanged.
+         * @param exchange The HTTP exchange object.
+         * @param data Map of fields to update.
+         * @param id The product ID.
+         * @throws IOException If the request fails.
+         */
         private static void handleUpdate(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
             Product existingProduct = products.get(id);
 
@@ -321,10 +362,17 @@ public class ProductService {
             
         }
 
+        /**
+         * Removes a product from the database if all provided fields match the record.
+         * @param exchange The HttpExchange for the current request.
+         * @param data Map containing product details for verification.
+         * @param id The ID of the product to delete.
+         * @throws IOException If the request fails.
+         */
         private static void handleDelete(HttpExchange exchange, Map<String, String> data, int id) throws IOException {
             Product existingProduct = products.get(id);
 
-            if (existingProduct == null) { // Return error, user DNE (Not found)
+            if (existingProduct == null) { // Return error, product DNE (Not found)
                 exchange.sendResponseHeaders(404, 0);
                 exchange.close();
                 return;
