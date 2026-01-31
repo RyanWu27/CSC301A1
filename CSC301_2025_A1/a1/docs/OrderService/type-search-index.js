@@ -1,0 +1,1 @@
+typeSearchIndex = [{"l":"All Classes and Interfaces","u":"allclasses-index.html"},{"p":"<Unnamed>","l":"OrderService.HttpResult"},{"p":"<Unnamed>","l":"OrderService.OrderHandler"},{"p":"<Unnamed>","l":"OrderService"},{"p":"<Unnamed>","l":"OrderService.ProductProxyHandler"},{"p":"<Unnamed>","l":"OrderService.UserProxyHandler"}];updateSearchResults();
