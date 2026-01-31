@@ -1,4 +1,9 @@
 Compilation
+
+Before anything, run:
+    chmod +x runme.sh
+This allows the runme.sh to become executable
+
 To compile all Java source files and generate class files in the 'compiled' directory, run:
 ./runme.sh -c
 
